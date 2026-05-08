@@ -29,7 +29,7 @@ import { pointInQdv } from "./qdv.js";
  * @property {number} [k=5] Cap on results when no feature contains the point
  *                          (kNN fallback in the spatial index).
  * @property {boolean} [refine=false] Run point-in-polygon on each match using
- *                                    the stored q24 geometry; sets
+ *                                    the stored qdv geometry; sets
  *                                    `insidePolygon` on each result.
  * @property {string|null} [locale]  Override the client's current locale for
  *                                   this call only. Use `null` for none.

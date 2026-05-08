@@ -61,7 +61,7 @@ function readZigZag(view, pos) {
 // --- Decode to nested arrays ------------------------------------------
 
 /**
- * Decode a q24 geometry buffer into nested coordinate arrays.
+ * Decode a qdv geometry buffer into nested coordinate arrays.
  * Returns: [polygon[ring[[lng, lat], ...]]]
  */
 export function decodeGeometry(view) {

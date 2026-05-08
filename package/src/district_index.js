@@ -200,7 +200,7 @@ class MinHeap {
 //   repeated double bbox     = 4;  // wire type 2 (packed)
 //   map<string,string> tags  = 5;  // wire type 2 (sub-message per entry)
 //   bytes geometry_wkb       = 6;  // wire type 2 (deprecated)
-//   bytes geometry_qdv       = 7;  // wire type 2 (q24-delta-varint, see qdv.js)
+//   bytes geometry_qdv       = 7;  // wire type 2 (qdv, see qdv.js)
 // }
 
 const decoder = new TextDecoder("utf-8");
@@ -267,7 +267,7 @@ function parseDistrict(view, start, end) {
     name: "",
     bbox: [],
     tags: {},
-    /** DataView slice over the q24-delta-varint geometry, or null. */
+    /** DataView slice over the qdv geometry, or null. */
     geometry: null,
   };
   let pos = start;
@@ -296,7 +296,7 @@ function parseDistrict(view, start, end) {
         const [k, v] = parseMapEntry(view, pos, valEnd);
         out.tags[k] = v;
       } else if (fieldNum === 7) {
-        // q24-delta-varint geometry — keep as a DataView slice for the caller
+        // qdv geometry — keep as a DataView slice for the caller
         // (use the qdv.js helpers to decode or PIP-test).
         out.geometry = new DataView(view.buffer,
                                     view.byteOffset + pos,
