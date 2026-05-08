@@ -1,0 +1,28 @@
+# Large data artifacts — produced by the build, not source.
+planet-latest.osm.pbf
+planet-filtered.osm.pbf
+planet-districts.dpb
+planet-districts.drt
+test-*.osm.pbf
+test-*.dpb
+test-*.drt
+test-*.dn
+names/
+*.dn
+nodes-cache.tmp*
+
+# Build / runtime
+venv/
+__pycache__/
+*.pyc
+proto/__pycache__/
+proto/district_pb2.py
+
+# Node / wrangler local state
+node_modules/
+*.tgz
+.wrangler/
+
+# Logs / scratch
+*.log
+/tmp/

@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>District lookup</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    html, body { margin: 0; height: 100%; font-family: -apple-system, system-ui, sans-serif; }
+    #app { display: grid; grid-template-columns: 1fr 380px; height: 100%; }
+    #map { height: 100%; }
+    #panel { padding: 12px 14px; overflow: auto; border-left: 1px solid #ddd;
+             font-size: 13px; background: #fafafa; }
+    #panel h1 { font-size: 14px; margin: 0 0 6px; }
+    #panel .meta { color: #666; font-size: 11px; margin-bottom: 10px; }
+    .row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+    .row input, .row select { padding: 4px 6px; font-family: ui-monospace, monospace; font-size: 11px; }
+    .row label { font-size: 11px; color: #666; }
+    button { padding: 4px 10px; cursor: pointer; }
+    .hit { border: 1px solid #d8d8d8; border-radius: 4px; padding: 6px 8px;
+           margin-bottom: 6px; background: white; }
+    .hit .name { font-weight: 600; margin-bottom: 2px; }
+    .hit .kind { color: #666; font-size: 11px; }
+    .hit .meta { color: #999; font-size: 10px; font-family: ui-monospace, monospace; }
+    .hit.outside { opacity: 0.55; }
+    .pip-out { color: #b62; font-size: 10px; margin-left: 4px; }
+    .pip-in  { color: #2a7; font-size: 10px; margin-left: 4px; }
+    .err { color: #b22; background: #fee; border: 1px solid #fbb;
+           padding: 6px 8px; border-radius: 4px; white-space: pre-wrap;
+           font-size: 11px; }
+    .stat { color: #555; font-size: 11px; margin: 6px 0 10px;
+            font-family: ui-monospace, monospace; }
+    code { background: #eee; padding: 1px 4px; border-radius: 2px; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="map"></div>
+    <div id="panel">
+      <h1>District lookup</h1>
+      <div class="meta">
+        Click anywhere on the map. The browser fetches only the R-tree pages
+        and feature blobs it needs from the <code>.drt</code> file via HTTP
+        <code>Range</code> requests. Names come from a separate per-locale
+        <code>.dn</code> overlay. PIP refinement decodes the q24 polygon
+        in-browser to filter false bbox positives.
+      </div>
+      <div class="row">
+        <input id="indexUrl"
+               value="https://pub-ba286604ef7044678dbc982b6ccb7fa4.r2.dev/planet-districts.drt"
+               style="flex:1" />
+        <button id="open">Open</button>
+      </div>
+      <div class="row">
+        <label>Locale:</label>
+        <select id="locale" style="flex:1">
+          <option value="">— local name only —</option>
+        </select>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="refine" /> point-in-polygon refine</label>
+      </div>
+      <div id="meta" class="meta"></div>
+      <div id="stat" class="stat"></div>
+      <div id="results"></div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module">
+    import { LookupClient } from "../package/src/index.js";
+
+    const map = L.map("map").setView([40.7150, -73.9550], 5);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19, attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    const layer = L.layerGroup().addTo(map);
+    const $meta    = document.getElementById("meta");
+    const $stat    = document.getElementById("stat");
+    const $results = document.getElementById("results");
+    const $url     = document.getElementById("indexUrl");
+    const $open    = document.getElementById("open");
+    const $locale  = document.getElementById("locale");
+    const $refine  = document.getElementById("refine");
+
+    // Default to the public R2 bucket; tweak the indexUrl input + the
+    // BASE constant below if you're hosting your own copy elsewhere.
+    const NAMES_BASE = "https://pub-ba286604ef7044678dbc982b6ccb7fa4.r2.dev";
+
+    let client = null;
+
+    function fmtBytes(n) {
+      if (n < 1024) return `${n} B`;
+      if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`;
+      if (n < 1024 ** 3) return `${(n / 1024 / 1024).toFixed(1)} MiB`;
+      return `${(n / 1024 ** 3).toFixed(2)} GiB`;
+    }
+    function fmtM(x) {
+      return x < 1000 ? `${x.toFixed(0)} m` : `${(x / 1000).toFixed(2)} km`;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
+      }[c]));
+    }
+    function showError(e) {
+      $results.innerHTML = "";
+      const div = document.createElement("div");
+      div.className = "err";
+      div.textContent = e.message || String(e);
+      $results.appendChild(div);
+    }
+
+    async function open() {
+      $meta.textContent = "Opening…";
+      $results.innerHTML = "";
+      try {
+        client = new LookupClient({
+          indexUrl:    $url.value,
+          namesBaseUrl: NAMES_BASE,
+          manifestUrl:  `${NAMES_BASE}/planet-names.manifest.json`,
+        });
+        await client.open();
+        const m = client.index.meta;
+        $meta.innerHTML =
+          `pageSize=${m.pageSize}, ${m.numFeatures.toLocaleString()} features, ` +
+          `${m.numNodes.toLocaleString()} pages, file ≈ ${fmtBytes(m.rootOffset + m.pageSize)}`;
+        // Reset locale dropdown and populate from manifest.
+        $locale.innerHTML = '<option value="">— local name only —</option>';
+        for (const e of client.locales) {
+          const opt = document.createElement("option");
+          opt.value = e.lang;
+          opt.textContent = `${e.lang}  (${e.entries.toLocaleString()})`;
+          $locale.appendChild(opt);
+        }
+      } catch (e) { showError(e); client = null; }
+    }
+    $open.addEventListener("click", open);
+    $locale.addEventListener("change", async () => {
+      if (!client) return;
+      try { await client.setLocale($locale.value || null); }
+      catch (e) { showError(e); $locale.value = ""; }
+    });
+    open();
+
+    map.on("click", async (ev) => {
+      if (!client) { showError(new Error("Index not opened")); return; }
+      const { lat, lng } = ev.latlng;
+      layer.clearLayers();
+      L.marker([lat, lng]).addTo(layer);
+      $stat.textContent = "Querying…";
+      $results.innerHTML = "";
+
+      const beforeStats = client.stats;
+      const t0 = performance.now();
+      let matches;
+      try {
+        matches = await client.lookup(lat, lng, { refine: $refine.checked });
+      } catch (e) { showError(e); $stat.textContent = ""; return; }
+      const dt = performance.now() - t0;
+      const after = client.stats;
+      const reqs = (after.indexRequests + after.overlayRequests) -
+                   (beforeStats.indexRequests + beforeStats.overlayRequests);
+      const bytes = (after.indexBytes + after.overlayBytes) -
+                    (beforeStats.indexBytes + beforeStats.overlayBytes);
+
+      const lonW = ((lng + 180) % 360 + 360) % 360 - 180;
+      $stat.textContent =
+        `(${lat.toFixed(5)}, ${lonW.toFixed(5)})  ` +
+        `${matches.length} match${matches.length === 1 ? "" : "es"}  ` +
+        `· ${reqs} req · ${fmtBytes(bytes)} · ${dt.toFixed(0)} ms`;
+
+      for (const m of matches) {
+        const t = m.tags;
+        const kind =
+          t.place ? `place=${t.place}` :
+          t.admin_level ? `admin_level=${t.admin_level}` :
+          t.leisure ? `leisure=${t.leisure}` :
+          t.boundary ? `boundary=${t.boundary}` : "";
+
+        const div = document.createElement("div");
+        div.className = "hit";
+        if (m.insidePolygon === false) div.classList.add("outside");
+
+        const distTag = m.minDist === 0
+          ? `<span style="color:#888;font-weight:400">· inside bbox</span>`
+          : `<span style="color:#a60;font-weight:400">· nearby ${fmtM(m.minDist)}</span>`;
+        const pipTag = m.insidePolygon === true
+          ? `<span class="pip-in">✓ inside polygon</span>`
+          : m.insidePolygon === false
+          ? `<span class="pip-out">✗ outside polygon</span>`
+          : "";
+
+        const local = escapeHtml(m.name) || "(unnamed)";
+        const primary = m.translatedName
+          ? `${escapeHtml(m.translatedName)} <span style="color:#888;font-weight:400">· ${local}</span>`
+          : local;
+        div.innerHTML = `
+          <div class="name">${primary} ${distTag} ${pipTag}</div>
+          <div class="kind">${escapeHtml(kind)}</div>
+          <div class="meta">osm_id=${m.osm_id.toString()} ·
+            bbox=[${m.bbox.map(x => x.toFixed(4)).join(", ")}]</div>
+        `;
+        $results.appendChild(div);
+        const [minLon, minLat, maxLon, maxLat] = m.bbox;
+        L.rectangle([[minLat, minLon], [maxLat, maxLon]], {
+          color: m.insidePolygon === false ? "#b62" : "#08f",
+          weight: 1, fillOpacity: 0.05,
+        }).addTo(layer);
+      }
+    });
+  </script>
+</body>
+</html>

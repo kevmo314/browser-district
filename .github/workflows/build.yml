@@ -1,0 +1,147 @@
+name: Build & publish district index
+
+# On-demand. Stream-downloads the planet OSM PBF (~86 GB), filters it to
+# district-relevant features, builds the q28 R-tree + per-locale name overlays,
+# and uploads everything to the R2 bucket `district`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      planet_url:
+        description: "Source planet PBF URL (default: planet.openstreetmap.org)"
+        required: false
+        default: "https://planet.openstreetmap.org/pbf/planet-latest.osm.pbf"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360 # 6h cap; typical end-to-end is ~90 min
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # GH-hosted ubuntu-latest gives us ~14 GB of free SSD by default. The
+      # planet PBF is 86 GB so we MUST stream it instead of materializing.
+      # Even after streaming, the filtered.pbf + dpb + drt + temp slim.dpb
+      # peak around 5–6 GB simultaneously, plus venv/apt — drop the
+      # preinstalled toolchains we don't need to be safe.
+      - name: Reclaim disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache /usr/local/share/boost \
+                      "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - name: Install osmium-tool + protoc
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            osmium-tool protobuf-compiler curl
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Install Python deps
+        run: |
+          python -m venv venv
+          venv/bin/pip install --quiet --upgrade pip
+          venv/bin/pip install --quiet osmium shapely protobuf zstandard
+
+      - name: Compile protobuf
+        run: protoc --python_out=. proto/district.proto
+
+      # --- Pipeline -------------------------------------------------------
+      #
+      # We don't materialize the 86 GB planet PBF; instead we stream it with
+      # curl directly into `osmium tags-filter`, which reads PBF from stdin
+      # (`-`) and writes the much smaller filtered file (~1.7 GB) to disk.
+
+      - name: Stream-filter planet → filtered.pbf
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 5 \
+            "${{ inputs.planet_url }}" | \
+          osmium tags-filter --overwrite - \
+            a/boundary=administrative \
+            a/boundary=national_park,protected_area \
+            a/leisure=nature_reserve,park \
+            a/place=borough,city_district,district,neighbourhood,quarter,suburb \
+            n/place=borough,city_district,district,neighbourhood,quarter,suburb \
+            -o planet-filtered.osm.pbf
+          ls -lh planet-filtered.osm.pbf
+          df -h /
+
+      - name: Assemble dpb
+        run: |
+          venv/bin/python extract_districts.py \
+            planet-filtered.osm.pbf planet-districts.dpb --skip-filter
+          ls -lh planet-districts.dpb
+          # filtered.pbf no longer needed
+          rm -f planet-filtered.osm.pbf nodes-cache.tmp*
+          df -h /
+
+      - name: Build R-tree (.drt)
+        run: |
+          venv/bin/python build_rtree.py \
+            planet-districts.dpb planet-districts.drt
+          ls -lh planet-districts.drt
+          df -h /
+
+      - name: Build name overlays
+        run: |
+          mkdir -p names
+          venv/bin/python build_names.py planet-districts.dpb names --all
+          ls -lh names | head -5
+          du -sh names
+
+      - name: Configure aws-cli for R2
+        run: |
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials <<EOF
+          [default]
+          aws_access_key_id = ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          EOF
+          cat > ~/.aws/config <<EOF
+          [default]
+          region = auto
+          EOF
+
+      - name: Upload .drt to R2
+        env:
+          R2_ENDPOINT: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          aws s3 cp planet-districts.drt s3://district/planet-districts.drt \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/octet-stream
+
+      - name: Upload name overlays to R2
+        env:
+          R2_ENDPOINT: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        run: |
+          # `s3 sync` does parallel uploads + only ships changed files.
+          # The manifest has `application/json` content-type; everything else
+          # is application/octet-stream by default.
+          aws s3 sync names/ s3://district/ \
+            --endpoint-url "$R2_ENDPOINT" \
+            --exclude "*.json"
+          aws s3 cp names/planet-names.manifest.json \
+            s3://district/planet-names.manifest.json \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/json
+
+      - name: Summary
+        run: |
+          echo "## Done" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Public URL: https://pub-ba286604ef7044678dbc982b6ccb7fa4.r2.dev" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "| File | Size |"
+            echo "|---|---|"
+            ls -lh planet-districts.drt | awk '{print "| `planet-districts.drt` |", $5, "|"}'
+            du -sh names | awk '{print "| `names/` (overlays) |", $1, "|"}'
+          } >> "$GITHUB_STEP_SUMMARY"

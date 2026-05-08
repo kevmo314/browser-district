@@ -1,0 +1,54 @@
+name: Deploy demo to GitHub Pages
+
+# Ships only the static demo (web/) + npm-package source (package/) to Pages.
+# The data files (.drt + .dn + manifest) are NOT shipped here — they live in
+# the R2 bucket `district` and the demo fetches them cross-origin via Range.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "package/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage Pages artifact
+        run: |
+          mkdir -p _site
+          # Demo HTML at /web/, package source at /package/ — preserves the
+          # `../package/src/index.js` import path the demo uses today.
+          cp -r web _site/web
+          cp -r package _site/package
+          # Convenience redirect so the bare site URL lands on the demo.
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=./web/">
+          <link rel="canonical" href="./web/">
+          <a href="./web/">→ district lookup demo</a>
+          HTML
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deploy
+        uses: actions/deploy-pages@v4

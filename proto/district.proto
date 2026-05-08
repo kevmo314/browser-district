@@ -1,0 +1,35 @@
+syntax = "proto3";
+package district;
+
+// Per-district feature payload stored in the index file's blob section.
+// The R-tree leaf points to one of these by (offset, size).
+message District {
+  uint64 osm_id = 1;
+  // 0 = node, 1 = way, 2 = relation
+  uint32 osm_type = 2;
+  string name = 3;
+  // Tight bbox: min_lon, min_lat, max_lon, max_lat (degrees, WGS84).
+  // Duplicated from the leaf entry so a feature blob is self-describing.
+  repeated double bbox = 4 [packed = true];
+  // Selected tags worth carrying alongside the geometry.
+  map<string, string> tags = 5;
+  // (Deprecated.) Polygon geometry as WKB. Replaced by geometry_qdv below
+  // because raw WKB is f64 binary and barely compressible.
+  bytes geometry_wkb = 6;
+  // Polygon geometry, custom encoding optimized for HTTP-range storage:
+  //   coords quantized to 24-bit integers in [0, 2^24) along each axis,
+  //   ZigZag-varint-encoded deltas between consecutive vertices within a ring.
+  // Resolution: 360°/2^24 ≈ 2.4 m at the equator (less near the poles).
+  // ~10× smaller than WKB, fully decodable for point-in-polygon checks.
+  // Layout (varints throughout; ZigZag for deltas):
+  //   varint num_polygons
+  //   per polygon:
+  //     varint num_rings   (1 outer + N inner)
+  //     per ring:
+  //       varint num_points
+  //       per point:
+  //         zigzag_varint dx, zigzag_varint dy   (delta from previous point;
+  //                                               first point's delta is from
+  //                                               (0,0))
+  bytes geometry_qdv = 7;
+}

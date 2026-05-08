@@ -1,0 +1,42 @@
+{
+  "name": "osm-district-lookup",
+  "version": "0.1.0",
+  "description": "HTTP-Range client for the OSM district R-tree + per-locale name overlays. Resolves a (lat, lng) to the OSM admin areas, neighborhoods, parks, and protected areas at that point.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./district-index": "./src/district_index.js",
+    "./names-overlay": "./src/names_overlay.js",
+    "./qdv": "./src/qdv.js"
+  },
+  "types": "index.d.ts",
+  "files": [
+    "src/",
+    "index.d.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "osm",
+    "openstreetmap",
+    "geocoding",
+    "reverse-geocoding",
+    "district",
+    "neighborhood",
+    "rtree",
+    "spatial-index",
+    "http-range"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/osm-district-lookup.git"
+  },
+  "sideEffects": false
+}
