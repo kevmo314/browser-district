@@ -1,4 +1,4 @@
-name: Publish osm-district-lookup to npm
+name: Publish browser-district to npm
 
 # Two ways to fire:
 #   1. Push a tag like v0.1.1 — uses the version baked into package.json (must
@@ -10,7 +10,7 @@ name: Publish osm-district-lookup to npm
 # npmjs.com under Account → Trusted Publishers (or the package's "Settings"
 # tab once it exists):
 #   Package:  browser-district
-#   Repo:     kevmo314/district
+#   Repo:     kevmo314/browser-district
 #   Workflow: .github/workflows/publish.yml
 #   (optional) Ref pattern: refs/tags/v*
 # When npm sees a publish from this exact (repo, workflow) running on a
@@ -65,5 +65,5 @@ jobs:
       - name: Publish to npm via Trusted Publisher (OIDC) + provenance
         # No NODE_AUTH_TOKEN — the npm CLI exchanges the GitHub OIDC token for
         # a short-lived publish token because Trusted Publisher is configured
-        # on npmjs.com for (browser-district, kevmo314/district, this workflow).
+        # on npmjs.com for (browser-district, kevmo314/browser-district, this workflow).
         run: npx -y npm@latest publish
