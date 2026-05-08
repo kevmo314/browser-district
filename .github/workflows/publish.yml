@@ -40,13 +40,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Trusted publishing requires npm CLI ≥ 11.5.1 (Node 22 ships with
-          # npm 10; pin to the latest npm explicitly).
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
-
-      - name: Upgrade npm to a trusted-publishing-capable version
-        run: npm install -g npm@latest
 
       # If this run was triggered by a tag, make sure the tag and the
       # version in package.json agree before we publish anything.
@@ -60,11 +55,15 @@ jobs:
             exit 1
           fi
 
+      # Trusted publishing requires npm CLI ≥ 11.5.1. Node 22 ships with
+       # npm 10.x, so pull a current npm via npx — avoids the well-known
+       # `npm install -g npm@latest` self-upgrade flakiness (MODULE_NOT_FOUND
+       # for promise-retry mid-upgrade) by never touching the global install.
       - name: Inspect tarball (dry run)
-        run: npm pack --dry-run
+        run: npx -y npm@latest pack --dry-run
 
       - name: Publish to npm via Trusted Publisher (OIDC) + provenance
         # No NODE_AUTH_TOKEN — the npm CLI exchanges the GitHub OIDC token for
         # a short-lived publish token because Trusted Publisher is configured
         # on npmjs.com for (browser-district, kevmo314/district, this workflow).
-        run: npm publish
+        run: npx -y npm@latest publish
