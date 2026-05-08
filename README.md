@@ -7,7 +7,7 @@ parks, and protected areas at that point — by sending a handful of HTTP
 transferred, against a 1.3 GB planet index.
 
 **Live demo:** https://kevmo314.github.io/district/
-**npm package:** [`osm-district-lookup`](./package)
+**npm package:** [`browser-district`](./package)
 
 ## What's in here
 
@@ -20,7 +20,7 @@ transferred, against a 1.3 GB planet index.
 | `qdv.py` | q28 delta-varint geometry codec — encode + decode + streaming PIP. |
 | `rtree_format.py` / `names_format.py` | Binary file formats (documented inline). |
 | `proto/district.proto` | Per-feature payload schema. |
-| `package/` | npm package (`osm-district-lookup`) — JS client for the browser/Node. |
+| `package/` | npm package (`browser-district`) — JS client for the browser/Node. |
 | `web/` | Demo site (Leaflet map; click → lookup). Deployed to Pages. |
 | `.github/workflows/build.yml` | Manual trigger: download planet, build everything, push to R2. |
 | `.github/workflows/pages.yml` | On-push to `main`: deploy demo to GitHub Pages. |

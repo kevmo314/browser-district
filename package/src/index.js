@@ -1,4 +1,4 @@
-// osm-district-lookup
+// browser-district
 // HTTP-Range client for the OSM district R-tree + per-locale name overlays.
 
 export { LookupClient } from "./lookup_client.js";

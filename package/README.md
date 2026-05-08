@@ -1,4 +1,4 @@
-# osm-district-lookup
+# browser-district
 
 Resolve a `(lat, lng)` to the OSM administrative areas, neighborhoods, parks,
 and protected areas at that point — by sending a handful of HTTP `Range`
@@ -9,7 +9,7 @@ honors `Range:`.
 ## Install
 
 ```bash
-npm install osm-district-lookup
+npm install browser-district
 ```
 
 ## Files you need to host
@@ -19,7 +19,7 @@ in this repo:
 
 | File | What | Typical size |
 |---|---|---|
-| `planet-districts.drt` | Packed R-tree + per-feature payloads (bbox, name, tags, q24 polygon) | ~900 MB (full planet) |
+| `planet-districts.drt` | Packed R-tree + per-feature payloads (bbox, name, tags, q28 polygon) | ~900 MB (full planet) |
 | `planet-names-<lang>.dn` | Per-locale name overlay; used to translate names away from the local script | a few KB to ~10 MB per locale |
 | `planet-names.manifest.json` | Index of available locales | <100 KB |
 
@@ -29,7 +29,7 @@ everything except `python3 -m http.server`).
 ## Usage
 
 ```js
-import { LookupClient } from "osm-district-lookup";
+import { LookupClient } from "browser-district";
 
 const client = new LookupClient({
   indexUrl:     "https://cdn.example.com/planet-districts.drt",
@@ -92,12 +92,12 @@ will use the new overlay.
 If you want to bypass the high-level client:
 
 ```js
-import { DistrictIndex, NamesOverlay, decodeGeometry, pointInQdv } from "osm-district-lookup";
+import { DistrictIndex, NamesOverlay, decodeGeometry, pointInQdv } from "browser-district";
 ```
 
 - **`DistrictIndex.open(url)`** — direct R-tree access. `index.queryPoint(lng, lat)` returns matches; uses BFS containment first, falls back to k-NN if nothing contains the point.
 - **`NamesOverlay.open(url)`** — direct overlay access. `overlay.lookupMany([id1, id2, …])` does a batched B+tree lookup and returns a `Map<id_string, name>`.
-- **`decodeGeometry(view)`** — explode a `q24` geometry to nested coordinate arrays `[polygon[ring[[lng, lat], …]]]`.
+- **`decodeGeometry(view)`** — explode a q28 geometry to nested coordinate arrays `[polygon[ring[[lng, lat], …]]]`.
 - **`pointInQdv(view, lon, lat)`** — even-odd ray-cast PIP that decodes the geometry on the fly (no allocation).
 
 ## File formats

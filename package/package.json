@@ -1,5 +1,5 @@
 {
-  "name": "osm-district-lookup",
+  "name": "browser-district",
   "version": "0.1.0",
   "description": "HTTP-Range client for the OSM district R-tree + per-locale name overlays. Resolves a (lat, lng) to the OSM admin areas, neighborhoods, parks, and protected areas at that point.",
   "type": "module",
