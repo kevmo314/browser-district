@@ -36,7 +36,16 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://example.com/osm-district-lookup.git"
+    "url": "git+https://github.com/kevmo314/district.git",
+    "directory": "package"
+  },
+  "homepage": "https://github.com/kevmo314/district",
+  "bugs": {
+    "url": "https://github.com/kevmo314/district/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "sideEffects": false
 }

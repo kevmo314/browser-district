@@ -1,0 +1,54 @@
+name: Publish osm-district-lookup to npm
+
+# Two ways to fire:
+#   1. Push a tag like v0.1.1 — uses the version baked into package.json (must
+#      match the tag minus the leading v, otherwise the workflow fails fast).
+#   2. workflow_dispatch — runs against package.json's current version, useful
+#      if you forgot the tag or want to re-run.
+#
+# `id-token: write` is what lets `npm publish --provenance` (implied by
+# package.json's publishConfig.provenance=true) request an OIDC token from
+# Actions to sign the build attestation through Sigstore.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: package
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      # If this run was triggered by a tag, make sure the tag and the
+      # version in package.json agree before we publish anything.
+      - name: Sanity-check tag vs package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME ($tag) doesn't match package.json version ($pkg)"
+            exit 1
+          fi
+
+      - name: Inspect tarball (dry run)
+        run: npm pack --dry-run
+
+      - name: Publish to npm with provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish
