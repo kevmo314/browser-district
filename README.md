@@ -6,7 +6,7 @@ parks, and protected areas at that point — by sending a handful of HTTP
 `.dn` name overlay. No server. ~5–15 range requests per query, ~20–60 KB
 transferred, against a 1.3 GB planet index.
 
-**Live demo:** https://kevmo314.github.io/district/web/
+**Live demo:** https://kevmo314.github.io/district/
 **npm package:** [`osm-district-lookup`](./package)
 
 ## What's in here
