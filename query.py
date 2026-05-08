@@ -52,6 +52,9 @@ class HttpBackend:
         self.bytes_read += length
         req = self._Request(self.url, headers={
             "Range": f"bytes={offset}-{offset + length - 1}",
+            # Cloudflare blocks Python-urllib's default UA. Use something
+            # neutral so this works against r2.dev / generic CDNs.
+            "User-Agent": "district-query/0.1",
         })
         with self._urlopen(req) as resp:
             if resp.status not in (200, 206):
