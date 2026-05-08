@@ -30,15 +30,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Stage Pages artifact
-        run: |
-          mkdir -p _site
-          cp index.html _site/index.html
-          cp -r package _site/package
-
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
-        with: { path: _site }
+        with: { path: . }
       - id: deploy
         uses: actions/deploy-pages@v4
