@@ -1,6 +1,6 @@
 // qdv.js
-// Decoder + point-in-polygon for the q24 delta-varint geometry encoding used
-// by the District protobuf's `geometry_qdv` field.
+// Decoder + point-in-polygon for the qdv (quantized-delta-varint) geometry
+// encoding used by the District protobuf's `geometry_qdv` field.
 //
 // Format (all varints; deltas are ZigZag):
 //   varint num_polygons
@@ -11,9 +11,10 @@
 //       per point:
 //         zigzag-varint dx, zigzag-varint dy
 //
-// Coordinates are quantized to 24-bit integers along each axis. Resolution at
-// the equator is 360°/2²⁴ ≈ 2.4 m. Within each ring, vertices are stored as
-// deltas from the previous vertex; the first vertex's delta is from (0, 0).
+// Coordinates are quantized to QDV_BITS-bit integers along each axis (default
+// 28 bits → 360°/2²⁸ ≈ 15 cm at the equator). Within each ring, vertices are
+// stored as deltas from the previous vertex; the first vertex's delta is from
+// (0, 0).
 
 export const QDV_BITS = 28;
 // 28-bit grid ≈ 15cm at the equator. Use 2 ** QDV_BITS — `1 << 28` would be
