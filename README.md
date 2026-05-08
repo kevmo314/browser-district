@@ -90,6 +90,15 @@ Required secrets (set via `gh secret set` or the repo settings UI):
 - `R2_SECRET_ACCESS_KEY`
 - `CF_ACCOUNT_ID` (used to construct `https://<id>.r2.cloudflarestorage.com`)
 
+## npm publish
+
+The `Publish browser-district to npm` workflow uses **npm Trusted Publishers**
+(OIDC), so there's no `NPM_TOKEN` secret in this repo. Configure the publisher
+once on npmjs.com (Account → Trusted Publishers): package `browser-district`,
+repo `kevmo314/district`, workflow `.github/workflows/publish.yml`. After that,
+pushing a tag `vX.Y.Z` (matching the version in `package/package.json`) triggers
+a Sigstore-signed publish with provenance.
+
 ## Hosting
 
 Files live in the public R2 bucket `district`. The public URL is

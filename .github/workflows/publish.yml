@@ -6,9 +6,19 @@ name: Publish osm-district-lookup to npm
 #   2. workflow_dispatch — runs against package.json's current version, useful
 #      if you forgot the tag or want to re-run.
 #
-# `id-token: write` is what lets `npm publish --provenance` (implied by
-# package.json's publishConfig.provenance=true) request an OIDC token from
-# Actions to sign the build attestation through Sigstore.
+# Auth: npm Trusted Publishers + GitHub OIDC. Configure the publisher on
+# npmjs.com under Account → Trusted Publishers (or the package's "Settings"
+# tab once it exists):
+#   Package:  browser-district
+#   Repo:     kevmo314/district
+#   Workflow: .github/workflows/publish.yml
+#   (optional) Ref pattern: refs/tags/v*
+# When npm sees a publish from this exact (repo, workflow) running on a
+# GitHub-hosted runner with `id-token: write`, it issues a short-lived
+# publish token via OIDC — no long-lived NPM_TOKEN secret in this repo.
+#
+# `publishConfig.provenance: true` in package.json signs the build
+# attestation through Sigstore using the same OIDC token.
 
 on:
   push:
@@ -30,8 +40,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # Trusted publishing requires npm CLI ≥ 11.5.1 (Node 22 ships with
+          # npm 10; pin to the latest npm explicitly).
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Upgrade npm to a trusted-publishing-capable version
+        run: npm install -g npm@latest
 
       # If this run was triggered by a tag, make sure the tag and the
       # version in package.json agree before we publish anything.
@@ -48,7 +63,8 @@ jobs:
       - name: Inspect tarball (dry run)
         run: npm pack --dry-run
 
-      - name: Publish to npm with provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm via Trusted Publisher (OIDC) + provenance
+        # No NODE_AUTH_TOKEN — the npm CLI exchanges the GitHub OIDC token for
+        # a short-lived publish token because Trusted Publisher is configured
+        # on npmjs.com for (browser-district, kevmo314/district, this workflow).
         run: npm publish
