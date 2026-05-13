@@ -60,16 +60,18 @@ export interface LookupOptions {
 }
 
 export interface LookupClientConfig {
-  /** URL of the .drt file. */
-  indexUrl: string;
-  /** Base URL for .dn overlays (no trailing slash). */
+  /** URL of the .drt file. Defaults to the project's public R2 bucket. */
+  indexUrl?: string;
+  /** Base URL for .dn overlays (no trailing slash). Defaults to the same bucket. */
   namesBaseUrl?: string;
-  /** URL of planet-names.manifest.json. */
+  /** URL of planet-names.manifest.json. Defaults to namesBaseUrl + the standard filename. */
   manifestUrl?: string;
 }
 
+export const DEFAULT_BASE_URL: string;
+
 export class LookupClient {
-  constructor(cfg: LookupClientConfig);
+  constructor(cfg?: LookupClientConfig);
   index: DistrictIndex | null;
   overlay: NamesOverlay | null;
   locale: string | null;

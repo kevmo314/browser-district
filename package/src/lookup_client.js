@@ -7,6 +7,11 @@ import { DistrictIndex } from "./district_index.js";
 import { NamesOverlay } from "./names_overlay.js";
 import { pointInQdv } from "./qdv.js";
 
+// Public R2 bucket the project publishes to. Override via constructor args
+// if you're hosting your own copy.
+export const DEFAULT_BASE_URL =
+  "https://pub-ba286604ef7044678dbc982b6ccb7fa4.r2.dev";
+
 /**
  * @typedef {Object} Match
  * @property {bigint} osm_id            OSM id of the source feature.
@@ -37,20 +42,20 @@ import { pointInQdv } from "./qdv.js";
 
 export class LookupClient {
   /**
-   * @param {Object} cfg
-   * @param {string} cfg.indexUrl       URL of the .drt file.
+   * @param {Object} [cfg]
+   * @param {string} [cfg.indexUrl]     URL of the .drt file.
+   *                                    Defaults to the project's public R2 bucket.
    * @param {string} [cfg.namesBaseUrl] Base URL for .dn overlay files (no
-   *                                    trailing slash). If omitted, name
-   *                                    translations are disabled.
-   * @param {string} [cfg.manifestUrl]  URL of planet-names.manifest.json. If
-   *                                    omitted, locales are loaded by guessing
-   *                                    the filename `planet-names-<lang>.dn`
-   *                                    under namesBaseUrl.
+   *                                    trailing slash). Defaults to the same
+   *                                    bucket the index lives in.
+   * @param {string} [cfg.manifestUrl]  URL of planet-names.manifest.json.
+   *                                    Defaults to `${namesBaseUrl}/planet-names.manifest.json`.
    */
-  constructor({ indexUrl, namesBaseUrl, manifestUrl }) {
-    this.indexUrl = indexUrl;
-    this.namesBaseUrl = namesBaseUrl ?? null;
-    this.manifestUrl = manifestUrl ?? null;
+  constructor({ indexUrl, namesBaseUrl, manifestUrl } = {}) {
+    this.indexUrl = indexUrl ?? `${DEFAULT_BASE_URL}/planet-districts.drt`;
+    this.namesBaseUrl = namesBaseUrl ?? DEFAULT_BASE_URL;
+    this.manifestUrl =
+      manifestUrl ?? `${this.namesBaseUrl}/planet-names.manifest.json`;
     /** @type {DistrictIndex|null} */
     this.index = null;
     /** @type {NamesOverlay|null} */
@@ -81,9 +86,6 @@ export class LookupClient {
   /** Switch the active locale. Pass `null` or `""` to disable translation. */
   async setLocale(lang) {
     if (!lang) { this.overlay = null; this.locale = null; return; }
-    if (!this.namesBaseUrl) {
-      throw new Error("namesBaseUrl was not configured");
-    }
     let file = `planet-names-${lang}.dn`;
     if (this.locales.length > 0) {
       const entry = this.locales.find((e) => e.lang === lang);

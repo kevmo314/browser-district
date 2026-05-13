@@ -75,10 +75,16 @@ class DistrictIndex:
         self.meta = unpack_header(head)
         self.page_size = self.meta["page_size"]
 
-    def query_point(self, lon: float, lat: float) -> Iterator[district_pb2.District]:
-        # Single-point query: find every leaf entry whose bbox contains (lon, lat),
-        # then load that feature blob and (optionally) refine via WKB polygon.
-        for blob_offset, blob_size in self._traverse(lon, lat):
+    def query_point(self, lon: float, lat: float, k_fallback: int = 5
+                    ) -> Iterator[district_pb2.District]:
+        """Match the JS LookupClient.lookup() shape: try strict bbox containment
+        first; if nothing contains the point, fall back to k-nearest-neighbor
+        on the same R-tree. Many OSM neighborhoods are point features with a
+        500m buffer that doesn't tile — kNN catches the gaps."""
+        leaves = list(self._traverse(lon, lat))
+        if not leaves:
+            leaves = list(self._knn(lon, lat, k_fallback))
+        for blob_offset, blob_size in leaves:
             blob = self.backend.read_range(blob_offset, blob_size)
             length, hdr_end = _DecodeVarint(blob, 0)
             msg = district_pb2.District()
@@ -101,6 +107,43 @@ class DistrictIndex:
                     yield child_off, child_size
                 else:
                     stack.append(child_off)
+
+    def _knn(self, lon: float, lat: float, k: int):
+        """Best-first kNN. Min-priority queue keyed by min-dist(point, bbox).
+        Mirrors package/src/district_index.js _queryNearest."""
+        import heapq
+        import math
+        cos_lat = math.cos(lat * math.pi / 180)
+        R = 6371000
+
+        def min_dist_m(minx, miny, maxx, maxy):
+            dx = max(0.0, minx - lon, lon - maxx) * cos_lat
+            dy = max(0.0, miny - lat, lat - maxy)
+            return math.sqrt(dx * dx + dy * dy) * (math.pi / 180) * R
+
+        # heap items: (min_dist, tiebreak, kind, offset, size)
+        # kind: 0=page, 1=feature
+        heap = []
+        seq = 0
+        heapq.heappush(heap, (0.0, seq, 0, self.meta["root_offset"], 0))
+        seq += 1
+        results = []
+        while heap and len(results) < k:
+            dist, _, kind, off, size = heapq.heappop(heap)
+            if kind == 1:
+                results.append((off, size))
+                continue
+            page = self.backend.read_range(off, self.page_size)
+            is_leaf, _, entry_count, _ = PAGE_HEADER_STRUCT.unpack_from(page, 0)
+            base = PAGE_HEADER_STRUCT.size
+            for i in range(entry_count):
+                (minx, miny, maxx, maxy, child_off, child_size, _) = \
+                    ENTRY_STRUCT.unpack_from(page, base + i * ENTRY_STRUCT.size)
+                d = min_dist_m(minx, miny, maxx, maxy)
+                heapq.heappush(heap, (d, seq, 0 if not is_leaf else 1,
+                                      child_off, child_size))
+                seq += 1
+        return results
 
 
 # --- CLI ------------------------------------------------------------------

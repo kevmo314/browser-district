@@ -84,10 +84,6 @@
     const $locale  = document.getElementById("locale");
     const $refine  = document.getElementById("refine");
 
-    // Default to the public R2 bucket; tweak the indexUrl input + the
-    // BASE constant below if you're hosting your own copy elsewhere.
-    const NAMES_BASE = "https://pub-ba286604ef7044678dbc982b6ccb7fa4.r2.dev";
-
     let client = null;
 
     function fmtBytes(n) {
@@ -116,11 +112,7 @@
       $meta.textContent = "Opening…";
       $results.innerHTML = "";
       try {
-        client = new LookupClient({
-          indexUrl:    $url.value,
-          namesBaseUrl: NAMES_BASE,
-          manifestUrl:  `${NAMES_BASE}/planet-names.manifest.json`,
-        });
+        client = new LookupClient({ indexUrl: $url.value });
         await client.open();
         const m = client.index.meta;
         $meta.innerHTML =
