@@ -26,3 +26,7 @@ node_modules/
 # Logs / scratch
 *.log
 /tmp/
+
+# eval artifacts
+eval/results.json
+eval/report.html
