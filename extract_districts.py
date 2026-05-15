@@ -10,8 +10,13 @@ Two-pass:
      emits a length-prefixed stream of District protobufs.
 
 District definition (override with --tag-spec):
-  boundary=administrative AND admin_level >= MIN_ADMIN_LEVEL (default 8)
+  boundary=administrative AND admin_level >= MIN_ADMIN_LEVEL (default 2)
   OR place IN {neighbourhood, suburb, borough, quarter, city_district, district}
+
+Lower-level admin boundaries (country=2, region=4, county=6) are kept so a
+single lookup() returns the entire admin chain containing the query point.
+Consumers map them to Mapbox-style tokens (country, region, district, place,
+locality, neighborhood) by admin_level.
 """
 from __future__ import annotations
 
@@ -49,7 +54,7 @@ PROTECTED_BOUNDARY_VALUES = {
     "protected_area",
     "national_park",
 }
-MIN_ADMIN_LEVEL = 8
+MIN_ADMIN_LEVEL = 2
 
 # Areas (relations / closed ways) carry polygon features. Place nodes carry
 # many neighborhoods that have no polygon in OSM (e.g. Williamsburg).
